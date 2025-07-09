@@ -8,10 +8,23 @@ from PyQt5.QtWidgets import (QApplication, QMainWindow, QVBoxLayout, QHBoxLayout
                              QFileDialog, QMessageBox, QProgressBar, QGroupBox,
                              QGridLayout, QCheckBox, QSpinBox, QComboBox)
 from PyQt5.QtCore import QUrl, QTimer, pyqtSignal, QThread, Qt
-from PyQt5.QtWebEngineWidgets import QWebEngineView, QWebEnginePage
+try:
+    from PyQt5.QtWebEngineWidgets import QWebEngineView, QWebEnginePage
+    WEBENGINE_AVAILABLE = True
+except ImportError:
+    WEBENGINE_AVAILABLE = False
+    print("Error: PyQtWebEngine is not installed. Please install it with: pip install PyQtWebEngine")
 from PyQt5.QtGui import QFont, QIcon
 import requests
 from bs4 import BeautifulSoup
+
+# Import advanced navigation module
+try:
+    from advanced_navigation import AdvancedNavigator, URLManager, NavigationConfig
+    ADVANCED_NAVIGATION_AVAILABLE = True
+except ImportError:
+    ADVANCED_NAVIGATION_AVAILABLE = False
+    print("Warning: advanced_navigation module not available")
 
 # Setup logging
 logging.basicConfig(
@@ -31,6 +44,9 @@ class WebExplorer(QMainWindow):
         self.setWindowTitle("Web Explorer - Text Extractor")
         self.setGeometry(100, 100, 1400, 900)
         
+        # Load configuration
+        self.config = self.load_config()
+        
         # Initialize variables
         self.current_url = ""
         self.extracted_texts = []
@@ -38,12 +54,55 @@ class WebExplorer(QMainWindow):
         self.urls_to_visit = []
         self.is_auto_mode = False
         
+        # Initialize advanced navigation if available
+        if ADVANCED_NAVIGATION_AVAILABLE:
+            self.url_manager = URLManager()
+            self.nav_config = NavigationConfig()
+        
         # Setup UI
         self.setup_ui()
         self.setup_web_engine()
         
         logger.info("Web Explorer application initialized successfully")
         
+    def load_config(self):
+        """Load configuration from config.json"""
+        try:
+            with open('config.json', 'r', encoding='utf-8') as f:
+                config = json.load(f)
+            logger.info("Configuration loaded successfully")
+            return config
+        except FileNotFoundError:
+            logger.warning("config.json not found, using default configuration")
+            return self.get_default_config()
+        except json.JSONDecodeError as e:
+            logger.error(f"Error parsing config.json: {e}")
+            return self.get_default_config()
+            
+    def get_default_config(self):
+        """Return default configuration if config.json is missing"""
+        return {
+            "browser": {
+                "default_url": "https://www.google.com",
+                "enable_javascript": True,
+                "timeout": 30000
+            },
+            "extraction": {
+                "remove_scripts": True,
+                "remove_styles": True,
+                "min_text_length": 10
+            },
+            "auto_mode": {
+                "enabled": False,
+                "delay_between_pages": 3,
+                "max_pages_per_session": 100
+            },
+            "output": {
+                "default_format": "txt",
+                "include_metadata": True
+            }
+        }
+
     def setup_ui(self):
         central_widget = QWidget()
         self.setCentralWidget(central_widget)
@@ -120,6 +179,10 @@ class WebExplorer(QMainWindow):
         self.delay_spinbox.setValue(3)
         self.delay_spinbox.setSuffix(" seconds")
         
+        # Add input for button text to click
+        self.next_button_text_input = QLineEdit()
+        self.next_button_text_input.setPlaceholderText("Button Text to Click (e.g., Skip for now)")
+        
         self.next_button = QPushButton("Next Page")
         self.next_button.clicked.connect(self.go_to_next_page)
         
@@ -129,6 +192,8 @@ class WebExplorer(QMainWindow):
         auto_layout.addWidget(self.auto_mode_checkbox)
         auto_layout.addWidget(QLabel("Delay between pages:"))
         auto_layout.addWidget(self.delay_spinbox)
+        auto_layout.addWidget(QLabel("Button Text to Click:"))
+        auto_layout.addWidget(self.next_button_text_input)
         auto_layout.addWidget(self.next_button)
         auto_layout.addWidget(self.skip_button)
         
@@ -506,10 +571,37 @@ class WebExplorer(QMainWindow):
             logger.info("Auto mode disabled")
             
     def go_to_next_page(self):
-        # This is a placeholder for automatic navigation
-        # You can implement your own logic here
-        QMessageBox.information(self, "Next Page", "Next page functionality - implement your navigation logic here")
-        
+        # Get the button text from the input
+        button_text = self.next_button_text_input.text().strip()
+        if not button_text:
+            QMessageBox.warning(self, "Input Required", "Please enter the button text to click for the next page.")
+            return
+        # JavaScript to click the button with exact (case-insensitive) text match
+        js_code = f'''
+        (function() {{
+            var targetText = "{button_text}".toLowerCase();
+            var buttons = document.querySelectorAll('button, input[type="button"], input[type="submit"]');
+            for (var i = 0; i < buttons.length; i++) {{
+                var btn = buttons[i];
+                var btnText = (btn.innerText || btn.value || '').trim().toLowerCase();
+                if (btnText === targetText) {{
+                    btn.click();
+                    return true;
+                }}
+            }}
+            return false;
+        }})();
+        '''
+        self.web_view.page().runJavaScript(js_code, self._on_next_page_js_result)
+    
+    def _on_next_page_js_result(self, result):
+        if result:
+            self.status_label.setText("Next page button clicked.")
+            logger.info("Next page button clicked.")
+        else:
+            self.status_label.setText("Button with specified text not found.")
+            logger.warning("Button with specified text not found.")
+            
     def skip_current_page(self):
         if self.extracted_texts:
             self.extracted_texts.pop()  # Remove the last extracted text
