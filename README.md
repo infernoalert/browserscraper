@@ -10,6 +10,7 @@ A desktop application with an embedded browser that allows you to navigate websi
 - **Text Extraction**: Extract all text content from web pages
 - **Batch Processing**: Save multiple pages of extracted text
 - **Auto Navigation**: Automated navigation between pages (configurable)
+- **Auto Loop**: Automated extraction and navigation for multiple iterations (1-100)
 - **Debug Tools**: Analyze page structure for better understanding
 
 ### 🎯 Key Components
@@ -31,6 +32,13 @@ A desktop application with an embedded browser that allows you to navigate websi
 - Configurable delay between pages
 - Next/Skip page controls
 - Progress tracking
+
+#### Auto Loop
+- Set number of iterations (1-100)
+- Automatic text extraction and saving
+- Automatic navigation to next page
+- Progress bar and status tracking
+- Stop/start controls
 
 #### Debug Tools
 - Analyze page forms, inputs, buttons, and links
@@ -86,6 +94,18 @@ run_app.bat
 2. Set delay between pages (in seconds)
 3. Use "Next Page" to manually advance
 4. Use "Skip Current Page" to skip without extracting
+
+### Auto Loop (New Feature)
+1. Set the number of iterations (1-100) in the "Number of iterations" field
+2. Enter the button text to click for next page (e.g., "Next", "Continue", "Skip for now")
+3. Click "Start Auto Loop" to begin the automated process
+4. The application will automatically:
+   - Extract text from the current page
+   - Save the extracted text to a file
+   - Click the specified button to go to the next page
+   - Repeat for the specified number of iterations
+5. Monitor progress with the progress bar and status updates
+6. Click "Stop Auto Loop" to stop the process early
 
 ## File Formats
 

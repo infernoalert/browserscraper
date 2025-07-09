@@ -54,6 +54,13 @@ class WebExplorer(QMainWindow):
         self.urls_to_visit = []
         self.is_auto_mode = False
         
+        # Auto loop variables
+        self.auto_loop_running = False
+        self.auto_loop_iterations = 0
+        self.auto_loop_current_iteration = 0
+        self.auto_loop_timer = QTimer()
+        self.auto_loop_timer.timeout.connect(self.auto_loop_step)
+        
         # Initialize advanced navigation if available
         if ADVANCED_NAVIGATION_AVAILABLE:
             self.url_manager = URLManager()
@@ -197,6 +204,32 @@ class WebExplorer(QMainWindow):
         auto_layout.addWidget(self.next_button)
         auto_layout.addWidget(self.skip_button)
         
+        # New Auto Loop section
+        auto_loop_group = QGroupBox("Auto Loop")
+        auto_loop_layout = QVBoxLayout(auto_loop_group)
+        
+        # Number of iterations input
+        iterations_layout = QHBoxLayout()
+        iterations_layout.addWidget(QLabel("Number of iterations:"))
+        self.iterations_spinbox = QSpinBox()
+        self.iterations_spinbox.setRange(1, 100)
+        self.iterations_spinbox.setValue(10)
+        iterations_layout.addWidget(self.iterations_spinbox)
+        
+        # Auto button
+        self.auto_button = QPushButton("Start Auto Loop")
+        self.auto_button.clicked.connect(self.start_auto_loop)
+        
+        # Progress display
+        self.auto_progress_label = QLabel("Ready for auto loop")
+        self.auto_progress_bar = QProgressBar()
+        self.auto_progress_bar.setVisible(False)
+        
+        auto_loop_layout.addLayout(iterations_layout)
+        auto_loop_layout.addWidget(self.auto_button)
+        auto_loop_layout.addWidget(self.auto_progress_label)
+        auto_loop_layout.addWidget(self.auto_progress_bar)
+        
         # Status section
         status_group = QGroupBox("Status")
         status_layout = QVBoxLayout(status_group)
@@ -219,6 +252,7 @@ class WebExplorer(QMainWindow):
         left_layout.addWidget(url_group)
         left_layout.addWidget(extract_group)
         left_layout.addWidget(auto_group)
+        left_layout.addWidget(auto_loop_group)
         left_layout.addWidget(status_group)
         left_layout.addStretch()
         
@@ -476,19 +510,12 @@ class WebExplorer(QMainWindow):
     def extract_current_page(self):
         js_code = """
         function extractText() {
-            // Remove script and style elements
-            const scripts = document.querySelectorAll('script, style, nav, header, footer, aside');
-            scripts.forEach(el => el.remove());
-            
-            // Get all text content
+            // Do NOT remove any elements!
             const textContent = document.body.innerText || document.body.textContent;
-            
-            // Clean up the text
             const cleanedText = textContent
-                .replace(/\\s+/g, ' ')
-                .replace(/\\n+/g, '\\n')
+                .replace(/\s+/g, ' ')
+                .replace(/\n+/g, '\n')
                 .trim();
-            
             return {
                 url: window.location.href,
                 title: document.title,
@@ -498,7 +525,6 @@ class WebExplorer(QMainWindow):
         }
         extractText();
         """
-        
         self.web_page.runJavaScript(js_code, self.on_text_extracted)
         
     def on_text_extracted(self, result):
@@ -610,6 +636,189 @@ class WebExplorer(QMainWindow):
             logger.info("Current page skipped")
         else:
             self.status_label.setText("No page to skip")
+    
+    def start_auto_loop(self):
+        """Start the auto loop process"""
+        if self.auto_loop_running:
+            QMessageBox.warning(self, "Warning", "Auto loop is already running!")
+            return
+        
+        # Get number of iterations
+        self.auto_loop_iterations = self.iterations_spinbox.value()
+        self.auto_loop_current_iteration = 0
+        
+        if self.auto_loop_iterations < 1:
+            QMessageBox.warning(self, "Warning", "Please set a valid number of iterations (1-100)")
+            return
+        
+        # Start the auto loop
+        self.auto_loop_running = True
+        self.auto_button.setText("Stop Auto Loop")
+        self.auto_button.clicked.disconnect()
+        self.auto_button.clicked.connect(self.stop_auto_loop)
+        
+        # Setup progress bar
+        self.auto_progress_bar.setVisible(True)
+        self.auto_progress_bar.setMaximum(self.auto_loop_iterations)
+        self.auto_progress_bar.setValue(0)
+        
+        # Start the first iteration
+        self.auto_progress_label.setText(f"Starting auto loop ({self.auto_loop_iterations} iterations)")
+        logger.info(f"Starting auto loop with {self.auto_loop_iterations} iterations")
+        
+        # Start the first step immediately
+        self.auto_loop_step()
+    
+    def stop_auto_loop(self):
+        """Stop the auto loop process"""
+        self.auto_loop_running = False
+        self.auto_loop_timer.stop()
+        
+        # Reset button
+        self.auto_button.setText("Start Auto Loop")
+        self.auto_button.clicked.disconnect()
+        self.auto_button.clicked.connect(self.start_auto_loop)
+        
+        # Hide progress bar
+        self.auto_progress_bar.setVisible(False)
+        self.auto_progress_label.setText("Auto loop stopped")
+        
+        logger.info("Auto loop stopped by user")
+    
+    def auto_loop_step(self):
+        """Execute one step of the auto loop"""
+        if not self.auto_loop_running:
+            return
+        
+        self.auto_loop_current_iteration += 1
+        self.auto_progress_label.setText(f"Step {self.auto_loop_current_iteration}/{self.auto_loop_iterations}")
+        self.auto_progress_bar.setValue(self.auto_loop_current_iteration)
+        
+        logger.info(f"Auto loop step {self.auto_loop_current_iteration}/{self.auto_loop_iterations}")
+        
+        # Step 1: Extract current page text
+        self.status_label.setText(f"Step {self.auto_loop_current_iteration}: Extracting text...")
+        self.extract_current_page()
+        
+        # Wait for extraction to complete, then continue
+        # We'll use a timer to wait for the extraction to finish
+        QTimer.singleShot(2000, self.auto_loop_step_2)
+    
+    def auto_loop_step_2(self):
+        """Step 2: Save extracted text"""
+        if not self.auto_loop_running:
+            return
+        
+        self.status_label.setText(f"Step {self.auto_loop_current_iteration}: Saving text...")
+        
+        # Save the extracted text to a file
+        try:
+            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+            filename = f"auto_extracted_text_{timestamp}_iteration_{self.auto_loop_current_iteration}.txt"
+            
+            if self.extracted_texts:
+                with open(filename, 'w', encoding='utf-8') as f:
+                    for i, text_data in enumerate(self.extracted_texts, 1):
+                        f.write(f"=== Page {i} ===\n")
+                        f.write(f"URL: {text_data['url']}\n")
+                        f.write(f"Title: {text_data['title']}\n")
+                        f.write(f"Timestamp: {text_data['timestamp']}\n")
+                        f.write(f"Auto Loop Iteration: {self.auto_loop_current_iteration}\n")
+                        f.write("-" * 50 + "\n")
+                        f.write(text_data['text'])
+                        f.write("\n\n" + "=" * 80 + "\n\n")
+                
+                logger.info(f"Text saved to {filename}")
+                self.debug_log.setText(self.debug_log.toPlainText() + f"\nSaved: {filename}")
+            else:
+                logger.warning("No text to save in auto loop step 2")
+                self.debug_log.setText(self.debug_log.toPlainText() + "\nWarning: No text to save")
+        
+        except Exception as e:
+            logger.error(f"Failed to save file in auto loop: {str(e)}")
+            self.debug_log.setText(self.debug_log.toPlainText() + f"\nError saving file: {str(e)}")
+        
+        # Wait a bit, then go to step 3
+        QTimer.singleShot(1000, self.auto_loop_step_3)
+    
+    def auto_loop_step_3(self):
+        """Step 3: Go to next page"""
+        if not self.auto_loop_running:
+            return
+        
+        self.status_label.setText(f"Step {self.auto_loop_current_iteration}: Navigating to next page...")
+        
+        # Check if we've completed all iterations
+        if self.auto_loop_current_iteration >= self.auto_loop_iterations:
+            self.auto_loop_complete()
+            return
+        
+        # Get the button text to click for next page
+        button_text = self.next_button_text_input.text().strip()
+        if not button_text:
+            self.debug_log.setText(self.debug_log.toPlainText() + "\nWarning: No button text specified for next page")
+            self.auto_loop_complete()
+            return
+        
+        # Click the next page button
+        js_code = f'''
+        (function() {{
+            var targetText = "{button_text}".toLowerCase();
+            var buttons = document.querySelectorAll('button, input[type="button"], input[type="submit"], a');
+            for (var i = 0; i < buttons.length; i++) {{
+                var btn = buttons[i];
+                var btnText = (btn.innerText || btn.value || btn.textContent || '').trim().toLowerCase();
+                if (btnText === targetText) {{
+                    btn.click();
+                    return true;
+                }}
+            }}
+            return false;
+        }})();
+        '''
+        
+        self.web_view.page().runJavaScript(js_code, self._on_auto_next_page_result)
+    
+    def _on_auto_next_page_result(self, result):
+        """Handle the result of clicking the next page button in auto loop"""
+        if result:
+            logger.info(f"Auto loop: Next page button clicked for iteration {self.auto_loop_current_iteration}")
+            self.debug_log.setText(self.debug_log.toPlainText() + "\nAuto loop: Next page button clicked")
+            
+            # Wait for the page to load, then start the next iteration
+            delay = self.delay_spinbox.value() * 1000  # Convert to milliseconds
+            QTimer.singleShot(delay, self.auto_loop_step)
+        else:
+            logger.warning(f"Auto loop: Button with specified text not found for iteration {self.auto_loop_current_iteration}")
+            self.debug_log.setText(self.debug_log.toPlainText() + "\nAuto loop: Button not found, stopping")
+            self.auto_loop_complete()
+    
+    def auto_loop_complete(self):
+        """Handle completion of the auto loop"""
+        self.auto_loop_running = False
+        self.auto_loop_timer.stop()
+        
+        # Reset button
+        self.auto_button.setText("Start Auto Loop")
+        self.auto_button.clicked.disconnect()
+        self.auto_button.clicked.connect(self.start_auto_loop)
+        
+        # Hide progress bar
+        self.auto_progress_bar.setVisible(False)
+        
+        # Show completion message
+        if self.auto_loop_current_iteration >= self.auto_loop_iterations:
+            self.auto_progress_label.setText(f"Auto loop completed! ({self.auto_loop_iterations} iterations)")
+            self.status_label.setText("Auto loop completed successfully")
+            QMessageBox.information(self, "Auto Loop Complete", 
+                                  f"Auto loop completed successfully!\n"
+                                  f"Processed {self.auto_loop_iterations} iterations.\n"
+                                  f"Check the current directory for saved files.")
+        else:
+            self.auto_progress_label.setText("Auto loop stopped early")
+            self.status_label.setText("Auto loop stopped")
+        
+        logger.info(f"Auto loop completed after {self.auto_loop_current_iteration} iterations")
 
 class CustomWebPage(QWebEnginePage):
     def __init__(self):
