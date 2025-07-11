@@ -120,3 +120,6 @@ extracted_text_*.txt
 extracted_text_*.json
 web_explorer.log
 *.log 
+chromedriver/win64-138.0.7204.94/chromedriver-win64/chromedriver.exe
+chromedriver/win64-138.0.7204.94/chromedriver-win64/LICENSE.chromedriver
+chromedriver/win64-138.0.7204.94/chromedriver-win64/THIRD_PARTY_NOTICES.chromedriver

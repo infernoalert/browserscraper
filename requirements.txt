@@ -1,1 +1,54 @@
-selenium 
+# Core dependencies
+selenium>=4.15.0
+
+# Additional browser support
+webdriver-manager>=4.0.0
+
+# Data processing and export
+pandas>=2.0.0
+beautifulsoup4>=4.12.0
+lxml>=4.9.0
+
+# For HTTP requests and URL handling
+requests>=2.31.0
+urllib3>=2.0.0
+
+# For JSON and data handling (built-in, but ensuring compatibility)
+# json - built-in
+# csv - built-in
+# xml - built-in
+
+# For file handling and path operations
+pathlib>=1.0.0  # built-in in Python 3.4+
+
+# For GUI support (usually comes with Python)
+# tkinter - built-in
+
+# For logging and configuration
+# logging - built-in
+# configparser - built-in
+
+# For development and testing (optional)
+pytest>=7.0.0
+pytest-cov>=4.0.0
+black>=23.0.0
+flake8>=6.0.0
+
+# For regex operations
+# re - built-in
+
+# For threading and time operations
+# threading - built-in
+# time - built-in
+
+# For command-line argument parsing
+# argparse - built-in
+
+# For copying files (backup functionality)
+# shutil - built-in
+
+# For date and time operations
+# datetime - built-in
+
+# For type hints
+typing-extensions>=4.0.0 

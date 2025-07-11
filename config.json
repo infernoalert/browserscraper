@@ -1,0 +1,28 @@
+{
+  "browser": {
+    "browser_type": "chrome",
+    "headless": false,
+    "window_size": [1200, 800],
+    "implicit_wait": 10,
+    "page_load_timeout": 30,
+    "disable_gpu": true,
+    "disable_images": false,
+    "user_agent": null
+  },
+  "scraping": {
+    "default_delay": 1.0,
+    "retry_attempts": 3,
+    "retry_delay": 2.0,
+    "respect_robots_txt": true,
+    "max_pages": 100
+  },
+  "output": {
+    "output_dir": "output",
+    "output_format": "json",
+    "filename_prefix": "scraped_data",
+    "include_timestamp": true,
+    "create_backup": true
+  },
+  "log_level": "INFO",
+  "log_file": "scraper.log"
+} 

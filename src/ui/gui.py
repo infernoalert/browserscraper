@@ -1,7 +1,5 @@
-#!/usr/bin/env python3
 """
-Interactive Selenium Browser Controller
-A simple GUI that controls a Selenium browser with dropdown website selection
+GUI interface for browser scraper (moved from original selenium_auto_extractor.py)
 """
 
 import tkinter as tk
@@ -266,6 +264,7 @@ Instructions:
         # Start the GUI main loop
         self.window.mainloop()
 
+
 def main():
     """Main function to start the interactive controller"""
     print("🚀 Starting Interactive Selenium Browser Controller...")
@@ -277,6 +276,7 @@ def main():
     except Exception as e:
         print(f"❌ Failed to start application: {e}")
         input("Press Enter to exit...")
+
 
 if __name__ == '__main__':
     main() 
