@@ -7,12 +7,37 @@ import sys
 import json
 from typing import Dict, List, Optional
 
-from ..core.browser_manager import BrowserManager
-from ..core.scraper import WebScraper
-from ..core.config import config_manager
-from ..utils.logger import get_logger, get_session_logger
-from ..utils.file_utils import FileHandler, DataExporter
-from ..utils.exceptions import BrowserScraperException
+# Try different import paths
+try:
+    from ..core.browser_manager import BrowserManager
+    from ..core.scraper import WebScraper
+    from ..core.config import config_manager
+    from ..utils.logger import get_logger, get_session_logger
+    from ..utils.file_utils import FileHandler, DataExporter
+    from ..utils.exceptions import BrowserScraperException
+except ImportError:
+    # Try absolute imports
+    try:
+        from core.browser_manager import BrowserManager
+        from core.scraper import WebScraper
+        from core.config import config_manager
+        from utils.logger import get_logger, get_session_logger
+        from utils.file_utils import FileHandler, DataExporter
+        from utils.exceptions import BrowserScraperException
+    except ImportError:
+        # Try with src prefix
+        try:
+            from src.core.browser_manager import BrowserManager
+            from src.core.scraper import WebScraper
+            from src.core.config import config_manager
+            from src.utils.logger import get_logger, get_session_logger
+            from src.utils.file_utils import FileHandler, DataExporter
+            from src.utils.exceptions import BrowserScraperException
+        except ImportError as e:
+            print(f"Failed to import required modules: {e}")
+            print("Please ensure all dependencies are installed:")
+            print("pip install -r requirements.txt")
+            sys.exit(1)
 
 
 class CLI:
@@ -233,6 +258,10 @@ Examples:
     def run_scrape_links(self, args):
         """Run scrape-links command"""
         try:
+            if not self.scraper:
+                self.logger.error("Scraper not initialized")
+                return None
+                
             # Scrape links
             data = self.scraper.scrape_links(args.url, args.link_selector)
             
@@ -255,6 +284,10 @@ Examples:
     def run_scrape_images(self, args):
         """Run scrape-images command"""
         try:
+            if not self.scraper:
+                self.logger.error("Scraper not initialized")
+                return None
+                
             # Scrape images
             data = self.scraper.scrape_images(args.url, args.img_selector)
             
@@ -277,6 +310,10 @@ Examples:
     def run_scrape_forms(self, args):
         """Run scrape-forms command"""
         try:
+            if not self.scraper:
+                self.logger.error("Scraper not initialized")
+                return None
+                
             # Scrape forms
             data = self.scraper.scrape_forms(args.url, args.form_selector)
             
@@ -299,6 +336,10 @@ Examples:
     def run_scrape_pattern(self, args):
         """Run scrape-pattern command"""
         try:
+            if not self.scraper:
+                self.logger.error("Scraper not initialized")
+                return None
+                
             # Parse patterns
             patterns = json.loads(args.patterns)
             
@@ -327,17 +368,26 @@ Examples:
     def run_gui(self, args):
         """Run GUI command"""
         try:
-            # Import GUI module
-            from .gui import InteractiveSeleniumController
+            # Import GUI module - try different options
+            try:
+                from .gui_simple import SimpleScraperGUI
+                self.logger.info("Starting Simple GUI interface...")
+                app = SimpleScraperGUI()
+                app.run()
+            except ImportError:
+                try:
+                    from .gui import AdvancedScraperGUI
+                    self.logger.info("Starting Advanced GUI interface...")
+                    app = AdvancedScraperGUI()
+                    app.run()
+                except ImportError:
+                    self.logger.error("GUI modules not available")
+                    print("GUI not available. Try running: python gui_standalone.py")
             
-            self.logger.info("Starting GUI interface...")
-            app = InteractiveSeleniumController()
-            app.run()
-            
-        except ImportError:
-            self.logger.error("GUI module not available")
         except Exception as e:
             self.logger.error(f"Failed to start GUI: {str(e)}")
+            print(f"GUI error: {str(e)}")
+            print("Try running: python gui_standalone.py")
     
     def run_config(self, args):
         """Run config command"""

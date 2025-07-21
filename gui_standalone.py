@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-Advanced Browser Scraper GUI
-A comprehensive GUI for web scraping with multiple extraction methods
+Standalone Browser Scraper GUI
+A simple GUI that works without complex module dependencies
 """
 
 import tkinter as tk
@@ -14,44 +14,36 @@ from datetime import datetime
 from pathlib import Path
 import webbrowser
 
-# Import core modules
-from ..core.browser_manager import BrowserManager
-from ..core.scraper import WebScraper
-from ..core.config import ConfigManager, BrowserConfig, ScrapingConfig, OutputConfig
-from ..utils.logger import get_logger, get_session_logger
-from ..utils.file_utils import FileHandler, DataExporter
+# Try to import selenium, but don't fail if not available
+try:
+    from selenium import webdriver
+    from selenium.webdriver.chrome.options import Options
+    from selenium.webdriver.common.by import By
+    from selenium.common.exceptions import WebDriverException
+    SELENIUM_AVAILABLE = True
+except ImportError:
+    SELENIUM_AVAILABLE = False
+    print("⚠️ Selenium not available - browser automation disabled")
 
 
-class AdvancedScraperGUI:
+class StandaloneScraperGUI:
     def __init__(self):
-        # Initialize configuration
-        self.config_manager = ConfigManager()
-        self.config = self.config_manager.get_config()
-        
-        # Setup logging
-        self.logger = get_logger("gui", self.config.log_level, self.config.log_file)
-        
-        # Initialize components
-        self.browser_manager = None
-        self.scraper = None
-        self.driver = None
-        
         # Create the main window
         self.window = tk.Tk()
-        self.window.title("🌐 Advanced Browser Scraper")
-        self.window.geometry("1400x900")
-        self.window.minsize(1200, 800)
+        self.window.title("🌐 Browser Scraper GUI")
+        self.window.geometry("1200x800")
+        self.window.minsize(1000, 600)
         
         # Configure window
         self.window.grid_rowconfigure(0, weight=1)
         self.window.grid_columnconfigure(1, weight=1)
         
+        # Initialize components
+        self.driver = None
+        
         # Initialize GUI
         self.setup_gui()
         self.setup_styles()
-        
-        # Start browser initialization
-        self.start_browser_initialization()
         
     def setup_styles(self):
         """Configure custom styles for the GUI"""
@@ -82,11 +74,11 @@ class AdvancedScraperGUI:
         title_frame = ttk.Frame(main_container)
         title_frame.grid(row=0, column=0, columnspan=2, sticky="ew", pady=(0, 20))
         
-        title_label = ttk.Label(title_frame, text="🌐 Advanced Browser Scraper", 
+        title_label = ttk.Label(title_frame, text="🌐 Browser Scraper GUI", 
                                style="Title.TLabel")
         title_label.pack()
         
-        subtitle_label = ttk.Label(title_frame, text="Professional Web Scraping Tool", 
+        subtitle_label = ttk.Label(title_frame, text="Simple Web Scraping Tool", 
                                   style="Subtitle.TLabel", foreground="gray")
         subtitle_label.pack()
         
@@ -103,7 +95,7 @@ class AdvancedScraperGUI:
         """Create the left control panel"""
         left_frame = ttk.LabelFrame(parent, text="🎛️ Scraping Controls", padding="10")
         left_frame.grid(row=1, column=0, sticky="nsew", padx=(0, 10))
-        left_frame.grid_rowconfigure(8, weight=1)
+        left_frame.grid_rowconfigure(6, weight=1)
         
         # URL Input
         url_frame = ttk.Frame(left_frame)
@@ -143,27 +135,15 @@ class AdvancedScraperGUI:
                                           command=self.stop_browser, style="Danger.TButton", state="disabled")
         self.stop_browser_btn.pack(side="left")
         
-        # Scraping Methods
-        scraping_frame = ttk.LabelFrame(left_frame, text="🔍 Scraping Methods", padding="10")
+        # Scraping Options
+        scraping_frame = ttk.LabelFrame(left_frame, text="🔍 Scraping Options", padding="10")
         scraping_frame.grid(row=2, column=0, sticky="ew", pady=(0, 15))
         
-        # Method selection
-        self.method_var = tk.StringVar(value="page")
-        methods = [
-            ("📄 Page Scraping", "page"),
-            ("📊 Table Extraction", "table"),
-            ("🔗 Link Collection", "links"),
-            ("🖼️ Image Scraping", "images"),
-            ("📝 Form Analysis", "forms"),
-            ("🔍 Custom Patterns", "patterns")
-        ]
-        
-        for i, (text, value) in enumerate(methods):
-            ttk.Radiobutton(scraping_frame, text=text, variable=self.method_var, 
-                           value=value, command=self.on_method_change).grid(row=i, column=0, sticky="w", pady=2)
-        
-        # Method-specific options
-        self.create_method_options(scraping_frame)
+        # CSS Selectors
+        ttk.Label(scraping_frame, text="CSS Selectors (JSON):", style="Subtitle.TLabel").pack(anchor="w")
+        self.selectors_text = scrolledtext.ScrolledText(scraping_frame, height=6, width=40)
+        self.selectors_text.pack(fill="x", pady=(5, 0))
+        self.selectors_text.insert("1.0", '{\n  "title": "h1",\n  "content": "p"\n}')
         
         # Output Settings
         output_frame = ttk.LabelFrame(left_frame, text="💾 Output Settings", padding="10")
@@ -199,53 +179,13 @@ class AdvancedScraperGUI:
                                     command=self.start_scraping, style="Primary.TButton", state="disabled")
         self.scrape_btn.pack(fill="x", pady=(0, 5))
         
-        self.preview_btn = ttk.Button(action_frame, text="👁️ Preview Elements", 
-                                     command=self.preview_elements, style="Secondary.TButton", state="disabled")
+        self.preview_btn = ttk.Button(action_frame, text="👁️ Preview Page", 
+                                     command=self.preview_page, style="Secondary.TButton", state="disabled")
         self.preview_btn.pack(fill="x", pady=(0, 5))
         
         self.open_output_btn = ttk.Button(action_frame, text="📂 Open Output Folder", 
                                         command=self.open_output_folder, style="Secondary.TButton")
         self.open_output_btn.pack(fill="x")
-        
-    def create_method_options(self, parent):
-        """Create method-specific option widgets"""
-        self.options_frame = ttk.Frame(parent)
-        self.options_frame.grid(row=len(parent.winfo_children()), column=0, sticky="ew", pady=(10, 0))
-        
-        # Page scraping options
-        self.page_options = ttk.Frame(self.options_frame)
-        ttk.Label(self.page_options, text="CSS Selectors (JSON):", style="Subtitle.TLabel").pack(anchor="w")
-        self.selectors_text = scrolledtext.ScrolledText(self.page_options, height=6, width=40)
-        self.selectors_text.pack(fill="x", pady=(5, 0))
-        self.selectors_text.insert("1.0", '{\n  "title": "h1",\n  "content": "p"\n}')
-        
-        # Table options
-        self.table_options = ttk.Frame(self.options_frame)
-        ttk.Label(self.table_options, text="Table Selector:", style="Subtitle.TLabel").pack(anchor="w")
-        self.table_selector_var = tk.StringVar(value="table")
-        ttk.Entry(self.table_options, textvariable=self.table_selector_var, width=40).pack(fill="x", pady=(5, 0))
-        
-        # Link options
-        self.link_options = ttk.Frame(self.options_frame)
-        ttk.Label(self.link_options, text="Link Selector:", style="Subtitle.TLabel").pack(anchor="w")
-        self.link_selector_var = tk.StringVar(value="a")
-        ttk.Entry(self.link_options, textvariable=self.link_selector_var, width=40).pack(fill="x", pady=(5, 0))
-        
-        # Image options
-        self.image_options = ttk.Frame(self.options_frame)
-        ttk.Label(self.image_options, text="Image Selector:", style="Subtitle.TLabel").pack(anchor="w")
-        self.image_selector_var = tk.StringVar(value="img")
-        ttk.Entry(self.image_options, textvariable=self.image_selector_var, width=40).pack(fill="x", pady=(5, 0))
-        
-        # Pattern options
-        self.pattern_options = ttk.Frame(self.options_frame)
-        ttk.Label(self.pattern_options, text="Regex Patterns (JSON):", style="Subtitle.TLabel").pack(anchor="w")
-        self.patterns_text = scrolledtext.ScrolledText(self.pattern_options, height=6, width=40)
-        self.patterns_text.pack(fill="x", pady=(5, 0))
-        self.patterns_text.insert("1.0", '{\n  "email": "\\\\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\\\.[A-Z|a-z]{2,}\\\\b"\n}')
-        
-        # Show initial options
-        self.show_method_options()
         
     def create_right_panel(self, parent):
         """Create the right output panel"""
@@ -313,83 +253,28 @@ class AdvancedScraperGUI:
         self.log_text = scrolledtext.ScrolledText(log_frame, height=8, wrap=tk.WORD, state="disabled")
         self.log_text.grid(row=0, column=0, sticky="nsew")
         
-    def on_method_change(self):
-        """Handle method selection change"""
-        self.show_method_options()
-        
-    def show_method_options(self):
-        """Show options for the selected method"""
-        # Hide all option frames
-        for frame in [self.page_options, self.table_options, self.link_options, 
-                     self.image_options, self.pattern_options]:
-            frame.pack_forget()
-        
-        # Show relevant options
-        method = self.method_var.get()
-        if method == "page":
-            self.page_options.pack(fill="x", pady=(10, 0))
-        elif method == "table":
-            self.table_options.pack(fill="x", pady=(10, 0))
-        elif method == "links":
-            self.link_options.pack(fill="x", pady=(10, 0))
-        elif method == "images":
-            self.image_options.pack(fill="x", pady=(10, 0))
-        elif method == "patterns":
-            self.pattern_options.pack(fill="x", pady=(10, 0))
-    
-    def start_browser_initialization(self):
-        """Start browser initialization in background"""
-        def init_browser():
-            try:
-                self.update_status("Initializing browser manager...")
-                # Create browser config with GUI settings
-                browser_config = BrowserConfig(
-                    browser_type=self.browser_var.get(),
-                    headless=self.headless_var.get(),
-                    window_size=self.config.browser.window_size,
-                    implicit_wait=self.config.browser.implicit_wait,
-                    page_load_timeout=self.config.browser.page_load_timeout,
-                    disable_gpu=self.config.browser.disable_gpu,
-                    disable_images=self.config.browser.disable_images,
-                    user_agent=self.config.browser.user_agent
-                )
-                self.browser_manager = BrowserManager(browser_config, self.logger)
-                self.update_status("Browser manager ready")
-                self.window.after(0, self.enable_browser_controls)
-            except Exception as e:
-                self.update_status(f"Browser initialization failed: {str(e)}", "error")
-                self.log_error(f"Browser initialization error: {e}")
-        
-        threading.Thread(target=init_browser, daemon=True).start()
-    
     def start_browser(self):
         """Start the browser"""
-        if not self.browser_manager:
-            messagebox.showerror("Error", "Browser manager not initialized")
+        if not SELENIUM_AVAILABLE:
+            messagebox.showerror("Error", "Selenium not available. Please install: pip install selenium")
             return
         
         def start_browser_thread():
             try:
                 self.update_status("Starting browser...")
-                self.driver = self.browser_manager.start_browser()
                 
-                # Initialize file handler and data exporter
-                file_handler = FileHandler(self.config.output.output_dir, self.logger)
-                data_exporter = DataExporter(file_handler, self.logger)
+                # Set up Chrome options
+                options = Options()
+                if self.headless_var.get():
+                    options.add_argument('--headless')
+                options.add_argument('--disable-gpu')
+                options.add_argument('--window-size=1200,800')
+                options.add_argument('--no-sandbox')
+                options.add_argument('--disable-dev-shm-usage')
                 
-                # Create session logger
-                session_logger = get_session_logger(self.logger)
-                
-                # Initialize scraper with proper config
-                scraping_config = ScrapingConfig(
-                    default_delay=self.config.scraping.default_delay,
-                    retry_attempts=self.config.scraping.retry_attempts,
-                    retry_delay=self.config.scraping.retry_delay,
-                    respect_robots_txt=self.config.scraping.respect_robots_txt,
-                    max_pages=self.config.scraping.max_pages
-                )
-                self.scraper = WebScraper(self.browser_manager, scraping_config, 
-                                        session_logger, data_exporter)
+                # Start browser
+                self.driver = webdriver.Chrome(options=options)
+                self.driver.implicitly_wait(10)
                 
                 self.window.after(0, self.browser_started)
                 self.update_status("Browser started successfully")
@@ -423,7 +308,6 @@ class AdvancedScraperGUI:
             if self.driver:
                 self.driver.quit()
                 self.driver = None
-                self.scraper = None
             
             self.start_browser_btn.config(state="normal")
             self.stop_browser_btn.config(state="disabled")
@@ -453,7 +337,7 @@ class AdvancedScraperGUI:
     
     def start_scraping(self):
         """Start the scraping process"""
-        if not self.scraper:
+        if not self.driver:
             messagebox.showerror("Error", "Browser not started")
             return
         
@@ -468,69 +352,33 @@ class AdvancedScraperGUI:
         # Start scraping in background
         def scrape_thread():
             try:
-                method = self.method_var.get()
-                self.update_status(f"Starting {method} scraping...")
+                self.update_status("Starting scraping...")
                 self.progress_var.set(0)
                 
-                # Get method-specific parameters
-                params = self.get_scraping_params()
+                # Get selectors
+                selectors_text = self.selectors_text.get("1.0", tk.END).strip()
+                try:
+                    selectors = json.loads(selectors_text)
+                except json.JSONDecodeError:
+                    messagebox.showerror("Error", "Invalid JSON in CSS selectors")
+                    return
                 
-                # Perform scraping
-                url = self.url_var.get()
-                if method == "page":
-                    result = self.scraper.scrape_page(url, params.get("selectors", {}))
-                elif method == "table":
-                    result = self.scraper.scrape_table(url, params.get("table_selector", "table"))
-                elif method == "links":
-                    result = self.scraper.scrape_links(url, params.get("link_selector", "a"))
-                elif method == "images":
-                    result = self.scraper.scrape_images(url, params.get("image_selector", "img"))
-                elif method == "forms":
-                    result = self.scraper.scrape_forms(url)
-                elif method == "patterns":
-                    result = self.scraper.scrape_custom_pattern(url, params.get("patterns", {}))
-                else:
-                    raise ValueError(f"Unknown scraping method: {method}")
+                # Simple scraping using browser
+                data = {}
+                for field_name, selector in selectors.items():
+                    try:
+                        element = self.driver.find_element(By.CSS_SELECTOR, selector)
+                        data[field_name] = element.text
+                    except Exception as e:
+                        data[field_name] = f"Error: {str(e)}"
                 
                 self.progress_var.set(100)
-                self.window.after(0, lambda: self.handle_scraping_result(result))
+                self.window.after(0, lambda: self.handle_scraping_result(data))
                 
             except Exception as e:
                 self.window.after(0, lambda: self.handle_scraping_error(str(e)))
         
         threading.Thread(target=scrape_thread, daemon=True).start()
-    
-    def get_scraping_params(self):
-        """Get parameters for the selected scraping method"""
-        method = self.method_var.get()
-        params = {}
-        
-        if method == "page":
-            try:
-                selectors_text = self.selectors_text.get("1.0", tk.END).strip()
-                params["selectors"] = json.loads(selectors_text)
-            except json.JSONDecodeError:
-                messagebox.showerror("Error", "Invalid JSON in CSS selectors")
-                return {}
-        
-        elif method == "table":
-            params["table_selector"] = self.table_selector_var.get()
-        
-        elif method == "links":
-            params["link_selector"] = self.link_selector_var.get()
-        
-        elif method == "images":
-            params["image_selector"] = self.image_selector_var.get()
-        
-        elif method == "patterns":
-            try:
-                patterns_text = self.patterns_text.get("1.0", tk.END).strip()
-                params["patterns"] = json.loads(patterns_text)
-            except json.JSONDecodeError:
-                messagebox.showerror("Error", "Invalid JSON in regex patterns")
-                return {}
-        
-        return params
     
     def handle_scraping_result(self, result):
         """Handle successful scraping result"""
@@ -568,57 +416,65 @@ class AdvancedScraperGUI:
             filename = self.filename_var.get()
             format_type = self.output_format_var.get()
             
-            # Create file handler
-            file_handler = FileHandler(output_dir, self.logger)
+            # Create output directory
+            os.makedirs(output_dir, exist_ok=True)
             
             # Generate filename with timestamp
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             full_filename = f"{filename}_{timestamp}.{format_type}"
+            filepath = os.path.join(output_dir, full_filename)
             
             # Save data based on format
             if format_type == "json":
-                filepath = file_handler.save_json(data, full_filename)
-            elif format_type == "csv":
-                filepath = file_handler.save_csv(data, full_filename)
-            elif format_type == "xml":
-                filepath = file_handler.save_xml(data, full_filename)
+                with open(filepath, 'w', encoding='utf-8') as f:
+                    json.dump(data, f, indent=2, ensure_ascii=False)
             elif format_type == "txt":
-                filepath = file_handler.save_text(str(data), full_filename)
+                with open(filepath, 'w', encoding='utf-8') as f:
+                    f.write(str(data))
             else:
-                raise ValueError(f"Unsupported format: {format_type}")
+                # For CSV, XML - convert to JSON for now
+                with open(filepath, 'w', encoding='utf-8') as f:
+                    json.dump(data, f, indent=2, ensure_ascii=False)
             
             self.update_status(f"Results saved to {filepath}")
             
         except Exception as e:
             self.update_status(f"Error saving results: {str(e)}", "error")
     
-    def preview_elements(self):
-        """Preview elements on the current page"""
-        if not self.scraper:
+    def preview_page(self):
+        """Preview the current page"""
+        if not self.driver:
             messagebox.showerror("Error", "Browser not started")
             return
         
         try:
-            self.update_status("Previewing elements...")
+            self.update_status("Previewing page...")
             
-            # Get current page info
-            page_info = self.scraper.get_page_info()
+            # Get page info
+            page_info = {
+                'url': self.driver.current_url,
+                'title': self.driver.title,
+                'links': len(self.driver.find_elements(By.CSS_SELECTOR, "a")),
+                'images': len(self.driver.find_elements(By.CSS_SELECTOR, "img")),
+                'tables': len(self.driver.find_elements(By.CSS_SELECTOR, "table")),
+                'forms': len(self.driver.find_elements(By.CSS_SELECTOR, "form"))
+            }
             
             # Display preview
             self.results_text.config(state="normal")
             self.results_text.delete("1.0", tk.END)
             
             preview_text = f"""Page Preview:
-URL: {page_info.get('url', 'Unknown')}
-Title: {page_info.get('title', 'Unknown')}
+URL: {page_info['url']}
+Title: {page_info['title']}
 Elements found:
-- Links: {page_info.get('link_count', 0)}
-- Images: {page_info.get('image_count', 0)}
-- Tables: {page_info.get('table_count', 0)}
-- Forms: {page_info.get('form_count', 0)}
+- Links: {page_info['links']}
+- Images: {page_info['images']}
+- Tables: {page_info['tables']}
+- Forms: {page_info['forms']}
 
 Available elements for scraping:
-{json.dumps(page_info.get('elements', {}), indent=2)}
+{json.dumps(page_info, indent=2)}
 """
             
             self.results_text.insert("1.0", preview_text)
@@ -681,10 +537,6 @@ Available elements for scraping:
         except Exception as e:
             self.update_status(f"Error saving results: {str(e)}", "error")
     
-    def enable_browser_controls(self):
-        """Enable browser control buttons"""
-        self.start_browser_btn.config(state="normal")
-    
     def update_status(self, message, level="info"):
         """Update status message"""
         self.status_label.config(text=message)
@@ -706,11 +558,6 @@ Available elements for scraping:
         else:
             self.status_label.config(style="Status.TLabel")
     
-    def log_error(self, error_msg):
-        """Log error message"""
-        self.logger.error(error_msg)
-        self.update_status(f"ERROR: {error_msg}", "error")
-    
     def run(self):
         """Start the GUI application"""
         # Handle window close
@@ -731,10 +578,14 @@ Available elements for scraping:
 
 def main():
     """Main function to start the GUI"""
-    print("🚀 Starting Advanced Browser Scraper GUI...")
+    print("🚀 Starting Standalone Browser Scraper GUI...")
+    
+    if not SELENIUM_AVAILABLE:
+        print("⚠️ Selenium not available - install with: pip install selenium")
+        print("The GUI will still work but browser automation will be disabled.")
     
     try:
-        app = AdvancedScraperGUI()
+        app = StandaloneScraperGUI()
         app.run()
     except Exception as e:
         print(f"❌ Failed to start GUI: {e}")
